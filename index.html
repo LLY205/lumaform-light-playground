@@ -1,0 +1,920 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Lumaform — 动态光源工作台</title>
+  <style>
+    :root {
+      color-scheme: dark;
+      --bg: #000000;
+      --panel: rgba(15, 18, 28, .86);
+      --panel-strong: #101521;
+      --line: rgba(255, 255, 255, .08);
+      --muted: #7d879b;
+      --text: #f2f5fc;
+      --accent: #b79cff;
+      --accent-2: #8be6ff;
+      --green: #aaf2cf;
+      --radius: 18px;
+      font-family: Inter, ui-sans-serif, -apple-system, BlinkMacSystemFont, "SF Pro Display", "PingFang SC", "Microsoft YaHei", sans-serif;
+    }
+
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      min-width: 1180px;
+      color: var(--text);
+      background: #000;
+      min-height: 100vh;
+      overflow: hidden;
+    }
+
+    button, input { font: inherit; }
+    button { cursor: pointer; }
+
+    .app-shell { height: 100vh; display: flex; flex-direction: column; }
+    .topbar {
+      height: 72px;
+      padding: 0 28px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      border-bottom: 1px solid var(--line);
+      background: rgba(7, 9, 15, .72);
+      backdrop-filter: blur(18px);
+      z-index: 2;
+    }
+    .brand { display: flex; align-items: center; gap: 12px; }
+    .brand-mark { width: 31px; height: 31px; border-radius: 50%; background: #fff; position: relative; }
+    .brand-mark::after { content: ""; position: absolute; inset: 7px; border-radius: 50%; background: #0b0e16; }
+    .brand-name { font-size: 16px; font-weight: 700; letter-spacing: .04em; }
+    .brand-sub { color: var(--muted); font-size: 12px; margin-left: 4px; }
+    .top-actions { display: flex; align-items: center; gap: 9px; }
+    .status { display: flex; align-items: center; gap: 7px; color: var(--green); font-size: 12px; margin-right: 13px; }
+    .status-dot { width: 7px; height: 7px; border-radius: 50%; background: #79e7b4; box-shadow: 0 0 12px #79e7b4; }
+    .icon-btn, .ghost-btn, .primary-btn {
+      color: var(--text); border: 1px solid var(--line); background: rgba(255, 255, 255, .055);
+      border-radius: 10px; height: 36px; padding: 0 13px; transition: .18s ease;
+    }
+    .icon-btn { width: 36px; padding: 0; font-size: 16px; }
+    .ghost-btn:hover, .icon-btn:hover { background: rgba(255,255,255,.1); border-color: rgba(255,255,255,.18); }
+    .primary-btn { background: #f4f4f4; border: 0; color: #080808; font-weight: 700; box-shadow: none; }
+    .primary-btn:hover { filter: brightness(1.1); transform: translateY(-1px); }
+
+    .workspace { flex: 1; min-height: 0; display: grid; grid-template-columns: 246px minmax(600px, 1fr) 270px; }
+    .sidebar, .inspector { background: #050505; min-height: 0; }
+    .sidebar { border-right: 1px solid var(--line); padding: 20px 16px; }
+    .inspector { border-left: 1px solid var(--line); padding: 20px 17px; overflow: auto; }
+    .section-label { color: #768097; font-size: 10px; text-transform: uppercase; letter-spacing: .14em; font-weight: 700; margin: 3px 8px 12px; }
+    .upload-box {
+      border: 1px solid #2a2a2a; background: #0b0b0b;
+      border-radius: 14px; padding: 16px; margin-bottom: 25px; cursor: pointer; transition: .18s ease;
+    }
+    .upload-box:hover { border-color: #606060; background: #111; }
+    .upload-icon { width: 31px; height: 31px; border-radius: 9px; display: grid; place-items: center; color: #d5c7ff; background: rgba(191, 166, 255, .15); margin-bottom: 10px; font-size: 17px; }
+    .upload-title { font-size: 12px; font-weight: 700; }
+    .upload-note { color: var(--muted); font-size: 11px; margin-top: 5px; line-height: 1.4; }
+    #file-input { display: none; }
+    .layers { display: grid; gap: 7px; }
+    .layer { display: flex; align-items: center; gap: 10px; border: 1px solid transparent; padding: 10px 9px; border-radius: 11px; color: #c2c8d5; font-size: 12px; }
+    .layer.selected { border-color: #3e3e3e; background: #151515; color: #fff; }
+    .layer-icon { width: 23px; height: 23px; border-radius: 7px; display: grid; place-items: center; color: #94a5bd; background: rgba(255,255,255,.07); font-size: 11px; }
+    .layer.selected .layer-icon { color: #fff; background: #2a2a2a; }
+    .layer-name { flex: 1; }
+    .visibility { color: #798398; font-size: 12px; }
+    .side-bottom { position: absolute; bottom: 18px; left: 16px; right: 16px; color: var(--muted); font-size: 11px; line-height: 1.55; }
+
+    .canvas-area { display: flex; flex-direction: column; min-width: 0; min-height: 0; }
+    .canvas-toolbar { height: 57px; padding: 0 22px; display: flex; align-items: center; justify-content: space-between; border-bottom: 1px solid var(--line); }
+    .scene-title { display: flex; align-items: center; gap: 9px; font-size: 12px; color: #c3cad8; }
+    .scene-dot { width: 7px; height: 7px; border-radius: 50%; background: #af95ff; box-shadow: 0 0 11px #af95ff; }
+    .toolbar-group { display: flex; align-items: center; gap: 7px; }
+    .toolbar-btn { height: 31px; padding: 0 10px; border: 1px solid transparent; color: #8993a7; background: transparent; border-radius: 8px; font-size: 11px; }
+    .toolbar-btn:hover, .toolbar-btn.active { color: #fff; background: rgba(255,255,255,.065); border-color: var(--line); }
+    .stage-wrap { flex: 1; min-height: 0; display: grid; place-items: center; padding: 29px 31px 25px; overflow: hidden; perspective: 1400px; }
+    .stage {
+      position: relative; width: min(100%, 960px); aspect-ratio: 16 / 9; overflow: hidden; border-radius: 15px; perspective: 1400px; isolation: isolate; cursor: grab;
+      box-shadow: 0 25px 70px rgba(0, 0, 0, .5), 0 0 0 1px rgba(255,255,255,.08);
+      background: #000;
+    }
+    .stage:before { display: none; }
+    .space-3d { position: absolute; inset: 0; transform-origin: 50% 50%; transform-style: preserve-3d; pointer-events: none; will-change: transform; }
+    .space-3d:before, .space-3d:after { display: none; }
+    .orb-layer { position: absolute; inset: 0; transform-style: preserve-3d; pointer-events: none; }
+    .light-orb { --orb-color: #b58cff; --ray-length: 84px; --ray-width: 1px; --ray-opacity: .42; --ray-scale: 1; --pulse-duration: 2.8s; position: absolute; width: 7px; height: 7px; margin: -3.5px 0 0 -3.5px; pointer-events: auto; cursor: grab; transform-style: preserve-3d; opacity: .82; }
+    .light-orb::before { content: ""; position: absolute; left: 50%; top: 50%; width: calc(var(--ray-length) * 3.2); height: 1px; transform: translate(-50%, -50%) translateZ(1px); border-radius: 999px; pointer-events: none; background: linear-gradient(90deg, transparent 0%, color-mix(in srgb, var(--orb-color) 20%, transparent) 22%, color-mix(in srgb, var(--orb-color) 88%, transparent) 50%, color-mix(in srgb, var(--orb-color) 20%, transparent) 78%, transparent 100%); box-shadow: 0 0 10px color-mix(in srgb, var(--orb-color) 54%, transparent), 0 0 22px color-mix(in srgb, var(--orb-color) 24%, transparent); filter: blur(.4px); opacity: calc(var(--ray-opacity) * 1.3); }
+    .light-orb::after { content: ""; position: absolute; left: 50%; top: 50%; width: 54px; height: 54px; transform: translate(-50%, -50%) translateZ(-3px); border-radius: 50%; pointer-events: none; background: radial-gradient(circle, color-mix(in srgb, var(--orb-color) 38%, transparent) 0, color-mix(in srgb, var(--orb-color) 12%, transparent) 34%, transparent 73%); filter: blur(6px); opacity: .42; }
+    .light-orb.selected { filter: brightness(1.06); }
+    .orb-core { position: absolute; left: 50%; top: 50%; width: 2px; height: 2px; transform: translate(-50%, -50%) translateZ(3px); border-radius: 50%; pointer-events: none; background: radial-gradient(circle, color-mix(in srgb, var(--orb-color) 38%, transparent) 0 18%, color-mix(in srgb, var(--orb-color) 18%, transparent) 40%, transparent 78%); box-shadow: 0 0 3px color-mix(in srgb, var(--orb-color) 24%, transparent), 0 0 7px color-mix(in srgb, var(--orb-color) 12%, transparent); opacity: .46; }
+    .ray-plane { position: absolute; inset: 0; transform-style: preserve-3d; pointer-events: none; }
+    .ray-plane-x { transform: rotateX(90deg); }
+    .ray-plane-y { transform: rotateY(90deg); }
+    .orb-ray { position: absolute; left: 50%; top: 50%; width: var(--ray-width); height: var(--ray-length); transform-origin: 50% 100%; transform: translate(-50%, -100%) rotate(var(--angle)) scaleY(.76); border-radius: 999px; pointer-events: none; background: linear-gradient(to top, color-mix(in srgb, var(--orb-color) 58%, transparent) 0%, color-mix(in srgb, var(--orb-color) 44%, transparent) 30%, color-mix(in srgb, var(--orb-color) 14%, transparent) 70%, transparent 100%); filter: blur(.35px); opacity: var(--ray-opacity); animation: rayPulse var(--pulse-duration) ease-in-out infinite; animation-delay: var(--ray-delay); }
+    @keyframes rayPulse { 0%, 100% { transform: translate(-50%, -100%) rotate(var(--angle)) scaleY(calc(var(--ray-scale) * .72)); opacity: calc(var(--ray-opacity) * .48); } 50% { transform: translate(-50%, -100%) rotate(var(--angle)) scaleY(var(--ray-scale)); opacity: var(--ray-opacity); } }
+    .light-orb:not(.breathing) .orb-ray { animation: none; opacity: calc(var(--ray-opacity) * .72); transform: translate(-50%, -100%) rotate(var(--angle)) scaleY(calc(var(--ray-scale) * .9)); }
+    .organic-volume { position: absolute; inset: -30%; transform-style: preserve-3d; pointer-events: none; opacity: 0; }
+    .organic-volume-vertical { transform: rotateX(72deg) rotateZ(13deg); }
+    .organic-volume-depth { transform: rotateY(72deg) rotateZ(-11deg); }
+    .organic-volume::before { content: ""; position: absolute; left: 50%; top: 50%; width: calc(var(--ray-length) * 2.7); height: calc(var(--ray-length) * 2.7); transform: translate(-50%, -50%); border-radius: 50%; pointer-events: none; background: radial-gradient(circle, color-mix(in srgb, var(--orb-color) 26%, transparent) 0%, color-mix(in srgb, var(--orb-color) 13%, transparent) 24%, transparent 70%); filter: blur(9px); opacity: calc(var(--ray-opacity) * .82); }
+    .organic-volume::after { display: none; }
+    .organic-wisp { position: absolute; left: 50%; top: 50%; width: calc(var(--ray-width) * var(--organic-width)); height: calc(var(--ray-length) * var(--organic-length)); transform-origin: 50% 100%; transform: translate(-50%, -100%) rotate(var(--organic-angle)) skewX(var(--organic-skew)) scaleY(.78); border-radius: 62% 38% 49% 51% / 18% 27% 73% 82%; pointer-events: none; background: linear-gradient(to top, color-mix(in srgb, var(--orb-color) 46%, transparent) 0%, color-mix(in srgb, var(--orb-color) 28%, transparent) 34%, color-mix(in srgb, var(--orb-color) 8%, transparent) 74%, transparent 100%); filter: blur(var(--organic-blur)); opacity: calc(var(--ray-opacity) * var(--organic-opacity-mult)); animation: organicPulse var(--pulse-duration) ease-in-out infinite; animation-delay: var(--organic-delay); }
+    .organic-cloud { position: absolute; left: 50%; top: 50%; width: calc(var(--ray-length) * var(--cloud-width)); height: calc(var(--ray-length) * var(--cloud-height)); transform: translate(-18%, -50%) rotate(var(--cloud-angle)) translateX(var(--cloud-distance)) skewX(var(--cloud-skew)); border-radius: 58% 42% 65% 35% / 45% 56% 44% 55%; pointer-events: none; background: radial-gradient(ellipse, color-mix(in srgb, var(--orb-color) 30%, transparent) 0%, color-mix(in srgb, var(--orb-color) 12%, transparent) 42%, transparent 78%); filter: blur(var(--cloud-blur)); opacity: calc(var(--ray-opacity) * var(--cloud-opacity-mult)); animation: cloudPulse var(--pulse-duration) ease-in-out infinite; animation-delay: var(--cloud-delay); }
+    .organic-particle { position: absolute; left: 50%; top: 50%; width: var(--particle-size); height: var(--particle-size); transform: rotate(var(--particle-angle)) translateY(calc(var(--particle-distance) * -1)) scale(var(--particle-scale)); border-radius: 50%; pointer-events: none; background: radial-gradient(circle, color-mix(in srgb, var(--orb-color) 38%, transparent) 0%, color-mix(in srgb, var(--orb-color) 12%, transparent) 48%, transparent 76%); filter: blur(2px); opacity: calc(var(--ray-opacity) * var(--particle-opacity-mult)); animation: particleFloat var(--pulse-duration) ease-in-out infinite; animation-delay: var(--particle-delay); }
+    @keyframes organicPulse { 0%, 100% { transform: translate(-50%, -100%) rotate(var(--organic-angle)) skewX(var(--organic-skew)) scaleY(.64); opacity: calc(var(--ray-opacity) * var(--organic-opacity-mult) * .45); } 45% { transform: translate(-50%, -100%) rotate(calc(var(--organic-angle) + var(--organic-drift))) skewX(var(--organic-skew)) scaleY(1); opacity: calc(var(--ray-opacity) * var(--organic-opacity-mult)); } 100% { transform: translate(-50%, -100%) rotate(var(--organic-angle)) skewX(var(--organic-skew)) scaleY(.64); opacity: calc(var(--ray-opacity) * var(--organic-opacity-mult) * .45); } }
+    @keyframes organicHaze { 0%, 100% { transform: translate(-50%, -50%) scale(.86) rotate(-8deg); opacity: calc(var(--ray-opacity) * .28); } 50% { transform: translate(-50%, -50%) scale(1.08) rotate(11deg); opacity: calc(var(--ray-opacity) * .64); } }
+    @keyframes cloudPulse { 0%, 100% { transform: translate(-18%, -50%) rotate(var(--cloud-angle)) translateX(var(--cloud-distance)) skewX(var(--cloud-skew)) scale(.82); opacity: calc(var(--ray-opacity) * var(--cloud-opacity-mult) * .48); } 50% { transform: translate(-18%, -50%) rotate(calc(var(--cloud-angle) + var(--cloud-drift))) translateX(var(--cloud-distance)) skewX(var(--cloud-skew)) scale(1.08); opacity: calc(var(--ray-opacity) * var(--cloud-opacity-mult)); } }
+    @keyframes particleFloat { 0%, 100% { transform: rotate(var(--particle-angle)) translateY(calc(var(--particle-distance) * -1)) scale(calc(var(--particle-scale) * .75)); opacity: calc(var(--ray-opacity) * var(--particle-opacity-mult) * .4); } 50% { transform: rotate(calc(var(--particle-angle) + var(--particle-drift))) translateY(calc(var(--particle-distance) * -1.08)) scale(var(--particle-scale)); opacity: calc(var(--ray-opacity) * var(--particle-opacity-mult)); } }
+    .light-orb.rays .ray-plane { opacity: 0; }
+    .light-orb.rays .organic-volume { opacity: 1; }
+    .light-orb.rays .organic-volume-vertical { opacity: .62; }
+    .light-orb.rays .organic-volume-depth { opacity: .54; }
+    .light-orb.rays::before { opacity: 0; }
+    .light-orb.rays::after { opacity: .3; filter: blur(9px); }
+    .light-orb.rays .orb-core { opacity: .2; }
+    .light-orb.star-four .organic-volume, .light-orb.rainbow-ring .organic-volume, .light-orb.rainbow-star .organic-volume, .light-orb.rainbow-scatter .organic-volume, .light-orb.prism-ghost .organic-volume, .light-orb.soft-quatrefoil .organic-volume { opacity: 0; }
+    .light-orb.star-four .ray-plane, .light-orb.rainbow-ring .ray-plane, .light-orb.rainbow-star .ray-plane, .light-orb.rainbow-scatter .ray-plane, .light-orb.prism-ghost .ray-plane,
+    .light-orb.star-four::before, .light-orb.rainbow-ring::before, .light-orb.rainbow-star::before, .light-orb.rainbow-scatter::before, .light-orb.prism-ghost::before, .light-orb.soft-quatrefoil::before { opacity: 0; }
+    .light-orb.star-four .star-volume.four { opacity: 1; }
+    .star-volume.four .star-ray { border-radius: 999px; }
+    .quatrefoil-volume { position:absolute; inset:-8%; transform-style:preserve-3d; pointer-events:none; opacity:0; }
+    .light-orb.soft-quatrefoil .quatrefoil-volume { opacity:1; }
+    .light-orb.soft-quatrefoil::before, .light-orb.soft-quatrefoil::after { display:none; content:none; }
+    .light-orb.soft-quatrefoil .orb-core, .light-orb.soft-quatrefoil .ray-plane, .light-orb.soft-quatrefoil .organic-volume,
+    .light-orb.soft-quatrefoil .star-volume, .light-orb.soft-quatrefoil .beam-volume { display:none !important; opacity:0 !important; }
+    .quatrefoil-glow, .quatrefoil-shape { position:absolute; left:50%; top:50%; width:calc(var(--ray-length)*1.12); height:calc(var(--ray-length)*1.12); transform:translate(-50%,-50%) rotate(45deg) translateZ(2px); clip-path:polygon(50% 0%,54% 34%,58% 40%,65% 43%,100% 50%,65% 57%,58% 60%,54% 66%,50% 100%,46% 66%,42% 60%,35% 57%,0% 50%,35% 43%,42% 40%,46% 34%); }
+    .quatrefoil-glow { background:radial-gradient(ellipse at 50% 50%,color-mix(in srgb,var(--orb-color) 48%,white) 0%,color-mix(in srgb,var(--orb-color) 32%,transparent) 30%,color-mix(in srgb,var(--orb-color) 16%,transparent) 58%,transparent 78%); filter:blur(11px); opacity:.58; transform:translate(-50%,-50%) rotate(45deg) scale(1.12) translateZ(1px); }
+    .quatrefoil-shape { background:radial-gradient(ellipse at 50% 48%,color-mix(in srgb,var(--orb-color) 90%,white) 0%,color-mix(in srgb,var(--orb-color) 82%,white) 31%,color-mix(in srgb,var(--orb-color) 70%,transparent) 62%,color-mix(in srgb,var(--orb-color) 48%,transparent) 83%,transparent 100%); filter:blur(1.2px) drop-shadow(0 0 5px color-mix(in srgb,var(--orb-color) 48%,transparent)); opacity:.9; }
+    .light-orb.soft-quatrefoil .orb-core { opacity:0; }
+    .star-volume { position: absolute; inset: -38%; transform-style: preserve-3d; pointer-events: none; opacity: 0; }
+    .light-orb.star-four .star-volume { opacity: 1; }
+    .star-plane { position: absolute; inset: 0; transform-style: preserve-3d; pointer-events: none; }
+    .star-plane.vertical { transform: rotateY(90deg); }
+    .star-plane.depth { transform: rotateX(90deg) rotateZ(17deg); opacity: .72; }
+    .star-volume.four .star-ray { --star-long: 1; }
+    .star-ray { position: absolute; left: 50%; top: 50%; width: var(--star-width); height: var(--star-length); transform-origin: 50% 100%; transform: translate(-50%, -100%) rotate(var(--star-angle)) scaleY(var(--star-scale)); border-radius: 50%; pointer-events: none; background: linear-gradient(to top, color-mix(in srgb, var(--orb-color) 54%, transparent), color-mix(in srgb, var(--orb-color) 24%, transparent) 56%, transparent); filter: blur(var(--star-blur)); opacity: var(--star-opacity); animation: starPulse var(--pulse-duration) ease-in-out infinite; animation-delay: var(--star-delay); }
+    .star-volume.four .star-ray { border-radius: 999px; }
+    .star-halo { position: absolute; left: 50%; top: 50%; width: calc(var(--ray-length) * 2.5); height: calc(var(--ray-length) * 2.5); transform: translate(-50%, -50%); border-radius: 50%; pointer-events: none; background: radial-gradient(circle, color-mix(in srgb, var(--orb-color) 30%, transparent), color-mix(in srgb, var(--orb-color) 12%, transparent) 24%, transparent 68%); filter: blur(8px); opacity: calc(var(--ray-opacity) * .62); }
+    .rainbow-ring-volume, .rainbow-star-volume, .rainbow-scatter-volume, .prism-ghost-volume { position: absolute; inset: -8%; transform-style: preserve-3d; pointer-events: none; opacity: 0; }
+    .light-orb.rainbow-ring .rainbow-ring-volume, .light-orb.rainbow-star .rainbow-star-volume, .light-orb.rainbow-scatter .rainbow-scatter-volume, .light-orb.prism-ghost .prism-ghost-volume { opacity: 1; }
+    .rainbow-ring-volume { transform: translateZ(-5px) rotateX(12deg) rotateY(-9deg); }
+    .rainbow-ring-halo { position: absolute; left: 50%; top: 50%; width: calc(var(--ray-length) * 5.8); height: calc(var(--ray-length) * 5.8); transform: translate(-50%, -50%); border-radius: 50%; background: radial-gradient(circle, transparent 43%, rgba(255,255,255,.025) 48%, rgba(255,255,255,.075) 49%, transparent 56%); filter: blur(15px); }
+    .rainbow-ring-edge { position: absolute; left: 50%; top: 50%; width: calc(var(--ray-length) * 5.6); height: calc(var(--ray-length) * 5.6); transform: translate(-50%, -50%) scaleY(.94); border-radius: 50%; background: conic-gradient(from -90deg, transparent 0 5%, rgba(255,76,94,.22) 8%, rgba(255,191,94,.34) 13%, rgba(255,255,205,.28) 18%, rgba(92,246,190,.26) 24%, rgba(92,192,255,.36) 30%, rgba(178,130,255,.2) 37%, transparent 44% 56%, rgba(255,86,130,.18) 62%, rgba(255,211,116,.27) 69%, rgba(159,255,201,.22) 75%, rgba(93,202,255,.32) 82%, rgba(193,127,255,.24) 88%, transparent 95%); mask: radial-gradient(circle, transparent 48.6%, #000 49.5%, #000 50.15%, transparent 51%); filter: blur(2.6px) drop-shadow(0 0 7px rgba(140,195,255,.22)); opacity: .9; }
+    .rainbow-ring-glint { position: absolute; left: 50%; top: 50%; width: calc(var(--ray-length) * 5.65); height: calc(var(--ray-length) * 5.65); transform: translate(-50%, -50%); border-radius: 50%; background: conic-gradient(from 0deg, transparent 0 23%, rgba(255,255,255,.82) 24%, rgba(128,226,255,.42) 24.4%, transparent 25.5% 48%, rgba(255,255,255,.62) 49%, rgba(255,171,117,.35) 49.5%, transparent 51% 73%, rgba(255,255,255,.9) 74%, rgba(255,143,187,.34) 74.4%, transparent 75.5%); mask: radial-gradient(circle, transparent 48.9%, #000 49.5%, #000 50.05%, transparent 50.8%); filter: blur(1.4px); opacity: .62; }
+    .rainbow-ring-volume::after { content:""; position:absolute; left:50%; top:50%; width:calc(var(--ray-length)*.25); height:calc(var(--ray-length)*.25); transform:translate(-50%,-50%); border-radius:50%; background:radial-gradient(circle,rgba(255,255,255,.46),rgba(255,224,190,.11) 38%,transparent 75%); filter:blur(3px); }
+    .rainbow-star-volume { transform: translateZ(5px); }
+    .rainbow-star-haze { position:absolute; left:50%; top:50%; width:calc(var(--ray-length)*1.9); height:calc(var(--ray-length)*1.9); transform:translate(-50%,-50%); border-radius:50%; background:radial-gradient(circle,rgba(255,255,255,.58) 0%,rgba(255,236,211,.24) 12%,rgba(96,216,255,.1) 29%,transparent 68%); filter:blur(8px); }
+    .rainbow-star-ray { position:absolute; left:50%; top:50%; width:var(--flare-width); height:var(--flare-length); transform-origin:50% 0; transform:translateX(-50%) rotate(var(--flare-angle)) scaleY(var(--flare-scale)); clip-path:polygon(50% 0,100% 100%,50% 90%,0 100%); background:linear-gradient(to bottom,rgba(255,255,255,.84) 0%,rgba(255,255,255,.52) 12%,rgba(255,124,151,.28) 26%,rgba(255,216,129,.24) 42%,rgba(116,242,209,.2) 58%,rgba(105,188,255,.17) 75%,transparent 100%); filter:blur(var(--flare-blur)); opacity:var(--flare-opacity); }
+    .rainbow-star-ray.diagonal { background:linear-gradient(to bottom,rgba(255,255,255,.62),rgba(118,228,255,.3) 18%,rgba(173,130,255,.24) 38%,rgba(255,140,191,.18) 61%,transparent); }
+    .light-orb.rainbow-ring .orb-core, .light-orb.rainbow-star .orb-core { opacity:.3; }
+    .rainbow-scatter-volume { transform:translateZ(-4px) rotateX(8deg); }
+    .rainbow-scatter-cloud { position:absolute; left:50%; top:50%; width:calc(var(--ray-length)*4.4); height:calc(var(--ray-length)*4.4); transform:translate(-50%,-50%); border-radius:50%; background:conic-gradient(from 7deg,rgba(63,197,255,.02),rgba(95,227,255,.18),rgba(242,156,255,.12),rgba(255,216,139,.2),rgba(100,255,217,.12),rgba(76,167,255,.18),rgba(63,197,255,.02)); mask:radial-gradient(circle,transparent 0 12%,#000 32%,transparent 74%); filter:blur(23px); opacity:.7; }
+    .rainbow-scatter-ray { position:absolute; left:50%; top:50%; width:var(--scatter-width); height:calc(var(--ray-length)*var(--scatter-length)); transform-origin:50% 0; transform:translateX(-50%) rotate(var(--scatter-angle)) skewX(var(--scatter-skew)); border-radius:50%; background:linear-gradient(to bottom,rgba(255,255,255,.4),rgba(123,236,255,.28) 18%,rgba(169,134,255,.2) 38%,rgba(255,180,124,.18) 58%,transparent); filter:blur(var(--scatter-blur)); opacity:var(--scatter-opacity); }
+    .prism-ghost-volume { transform:translateZ(-8px) rotateY(-12deg); }
+    .prism-axis { position:absolute; left:50%; top:50%; width:calc(var(--ray-length)*6.5); height:2px; transform:translate(-50%,-50%) rotate(-8deg); background:linear-gradient(90deg,transparent,rgba(83,223,255,.08) 20%,rgba(255,128,197,.25) 46%,rgba(255,255,255,.54) 50%,rgba(255,209,115,.2) 54%,rgba(103,205,255,.09) 78%,transparent); filter:blur(3px); }
+    .prism-ghost-flare { position:absolute; left:var(--ghost-x); top:var(--ghost-y); width:var(--ghost-size); height:var(--ghost-size); transform:translate(-50%,-50%) rotate(var(--ghost-rotation)); border-radius:50%; background:radial-gradient(ellipse,rgba(255,255,255,.42) 0%,rgba(255,209,131,.23) 8%,rgba(73,237,255,.18) 17%,rgba(190,108,255,.16) 26%,rgba(255,113,174,.1) 34%,transparent 70%); filter:blur(var(--ghost-blur)); mix-blend-mode:screen; }
+    .prism-ghost-flare::after { content:""; position:absolute; inset:22%; border-radius:50%; border:1px solid rgba(255,255,255,.32); box-shadow:0 0 9px rgba(88,219,255,.28),inset 0 0 12px rgba(255,183,117,.18); transform:scaleX(.68); }
+    .prism-ghost-flare.small { width:calc(var(--ghost-size)*.32); height:calc(var(--ghost-size)*.32); filter:blur(2px); opacity:.75; }
+    @keyframes starPulse { 0%,100% { transform: translate(-50%, -100%) rotate(var(--star-angle)) scaleY(calc(var(--star-scale) * .82)); opacity: calc(var(--star-opacity) * .55); } 50% { transform: translate(-50%, -100%) rotate(var(--star-angle)) scaleY(var(--star-scale)); opacity: var(--star-opacity); } }
+    .beam-volume { position: absolute; inset: 0; transform-style: preserve-3d; pointer-events: none; opacity: 0; }
+    .beam-plane { position: absolute; inset: 0; transform-style: preserve-3d; pointer-events: none; }
+    .beam-plane-depth { transform: rotateY(68deg); opacity: .55; }
+    .beam-ray { position: absolute; left: 50%; top: 50%; width: var(--beam-width); height: var(--beam-length); transform-origin: 50% 0; transform: translateX(-50%) rotate(var(--beam-angle)) scaleY(.76); clip-path: polygon(50% 0%, 100% 100%, 0% 100%); pointer-events: none; background: linear-gradient(to bottom, color-mix(in srgb, var(--orb-color) 38%, transparent) 0%, color-mix(in srgb, var(--orb-color) 24%, transparent) 26%, color-mix(in srgb, var(--orb-color) 9%, transparent) 72%, transparent 100%); filter: blur(2.4px); opacity: var(--beam-opacity); animation: beamPulse var(--pulse-duration) ease-in-out infinite; animation-delay: var(--beam-delay); }
+    @keyframes beamPulse { 0%, 100% { transform: translateX(-50%) rotate(var(--beam-angle)) scaleY(.76); opacity: calc(var(--beam-opacity) * .48); } 50% { transform: translateX(-50%) rotate(var(--beam-angle)) scaleY(1); opacity: var(--beam-opacity); } }
+    .light-orb.beams .ray-plane, .light-orb.beams::before { opacity: 0; }
+    .light-orb.beams .beam-volume { opacity: 1; }
+    .light-orb.beams .organic-volume { opacity: 0; }
+    .light-orb.beams .star-volume { opacity: 0; }
+    .light-orb:not(.breathing) .beam-ray { animation: none; opacity: calc(var(--beam-opacity) * .72); transform: translateX(-50%) rotate(var(--beam-angle)) scaleY(.9); }
+    .light-orb.rays .beam-volume { opacity: 0; }
+    .plane-3d { position: absolute; left: 50%; top: 50%; width: 76%; aspect-ratio: 16 / 9; transform-style: preserve-3d; pointer-events: auto; transform: translate(-50%, -50%) scale(.9); }
+    .plane-3d:after { display: none; }
+    .plane-3d canvas { width: 100%; height: 100%; display: block; border-radius: 3px; }
+    .plane-lighting { position: absolute; inset: 0; z-index: 2; border-radius: 3px; overflow: hidden; pointer-events: none; mix-blend-mode: screen; filter: blur(4px) saturate(1.28); will-change: background; }
+    .plane-lighting canvas { position: absolute; inset: 0; width: 100%; height: 100%; display: block; pointer-events: none; }
+    .stage-label { position: absolute; left: 16px; top: 14px; padding: 5px 8px; border-radius: 6px; color: rgba(255,255,255,.68); background: rgba(5,6,10,.48); backdrop-filter: blur(10px); font-size: 10px; letter-spacing: .08em; pointer-events: none; }
+    .hint { position: absolute; bottom: 13px; left: 50%; transform: translateX(-50%); padding: 6px 10px; border-radius: 7px; color: rgba(255,255,255,.62); background: rgba(5,6,10,.46); font-size: 10px; pointer-events: none; transition: opacity .4s; }
+    .hint.hidden { opacity: 0; }
+    .stage-corner { position: absolute; right: 13px; top: 13px; width: 22px; height: 22px; border-right: 1px solid rgba(255,255,255,.43); border-top: 1px solid rgba(255,255,255,.43); opacity: .7; pointer-events: none; }
+    .transform-readout { position: absolute; right: 16px; bottom: 14px; color: rgba(190, 191, 227, .72); font: 10px ui-monospace, SFMono-Regular, Menlo, monospace; letter-spacing: .04em; pointer-events: none; }
+    .bottom-bar { height: 52px; border-top: 1px solid var(--line); display: flex; align-items: center; padding: 0 22px; color: #8d97aa; font-size: 11px; }
+    .light-status { display: flex; align-items: center; gap: 8px; }
+
+    .inspector-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 20px; }
+    .inspector-title { font-size: 13px; font-weight: 700; }
+    .selected-chip { color: #aeb9cf; font-size: 11px; display: flex; align-items: center; gap: 6px; }
+    .mini-swatch { width: 12px; height: 12px; border-radius: 4px; background: #a78bfa; box-shadow: 0 0 12px #a78bfa; }
+    .edit-position, .delete-light { height: 22px; padding: 0 7px; border: 1px solid #383838; border-radius: 6px; color: #a7a7a7; background: transparent; font-size: 10px; }
+    .edit-position { margin-left: 9px; }
+    .edit-position.active, .edit-position:hover:not(:disabled), .delete-light:hover:not(:disabled) { color: #fff; border-color: #777; }
+    .edit-position:disabled, .delete-light:disabled { opacity: .35; cursor: not-allowed; }
+    .position-editor { display: none; padding: 12px; margin: -3px 0 18px; border: 1px solid #252936; border-radius: 10px; background: rgba(255,255,255,.025); }
+    .position-editor.open { display: block; }
+    .axis-title { color: #8994a8; font-size: 10px; letter-spacing: .08em; text-transform: uppercase; margin-bottom: 10px; }
+    .axis-row { display: grid; grid-template-columns: 18px 1fr 38px; align-items: center; gap: 8px; margin-top: 9px; }
+    .axis-name { color: #b6bfd0; font-size: 10px; }
+    .axis-value { color: #d9dfff; font-size: 10px; text-align: right; font-variant-numeric: tabular-nums; }
+    .position-note { color: #667186; font-size: 9px; line-height: 1.4; margin-top: 10px; }
+    .control { padding-bottom: 19px; margin-bottom: 18px; border-bottom: 1px solid var(--line); }
+    .control:last-child { border-bottom: 0; }
+    .control-row { display: flex; justify-content: space-between; align-items: center; margin-bottom: 11px; }
+    .control-label { color: #abb3c2; font-size: 11px; }
+    .control-value { color: #d9dfff; font-size: 11px; font-variant-numeric: tabular-nums; }
+    .control-note { color: #667186; font-size: 10px; margin-top: 9px; }
+    input[type="range"] { width: 100%; height: 3px; appearance: none; background: #293040; border-radius: 9px; outline: none; }
+    input[type="range"]::-webkit-slider-thumb { appearance: none; width: 13px; height: 13px; border-radius: 50%; border: 2px solid #fff; background: #9c9c9c; box-shadow: none; }
+    input[type="range"]::-moz-range-thumb { width: 13px; height: 13px; border-radius: 50%; border: 2px solid #fff; background: #aa91ff; }
+    .color-row { display: flex; gap: 9px; align-items: center; }
+    input[type="color"] { width: 35px; height: 30px; border: 1px solid var(--line); border-radius: 8px; background: transparent; padding: 3px; }
+    .hex { flex: 1; height: 30px; border: 1px solid var(--line); background: rgba(255,255,255,.04); color: #ccd3e0; border-radius: 8px; padding: 0 9px; font-size: 11px; }
+    .effect-select { width: 100%; height: 31px; padding: 0 9px; border: 1px solid #2e2e2e; border-radius: 7px; background: #0b0b0b; color: #d4d4d4; font-size: 11px; }
+    .preset-list { display: flex; gap: 7px; }
+    .preset { height: 27px; width: 27px; border-radius: 8px; border: 2px solid transparent; padding: 0; }
+    .preset.active { border-color: white; box-shadow: 0 0 0 2px rgba(255,255,255,.16); }
+    .toggle-row { display: flex; justify-content: space-between; align-items: center; }
+    .toggle { width: 33px; height: 19px; border-radius: 20px; background: #373d4a; padding: 2px; transition: .2s; }
+    .toggle.on { background: #8870db; }
+    .toggle::after { content: ""; display: block; width: 15px; height: 15px; border-radius: 50%; background: #c8cedd; transition: .2s; }
+    .toggle.on::after { transform: translateX(14px); background: white; }
+    .add-light { width: 100%; height: 36px; margin-top: 3px; border: 1px solid #3b3b3b; border-radius: 8px; background: #0b0b0b; color: #d0d0d0; font-size: 11px; }
+    .add-light:hover { background: #161616; border-color: #737373; }
+    .tip { padding: 11px 12px; background: #0a0a0a; border: 1px solid #262626; border-radius: 8px; color: #858585; line-height: 1.5; font-size: 10px; }
+    .tip strong { color: #d0d0d0; font-weight: 600; }
+
+    @media (max-width: 1250px) { body { min-width: 1000px; } .workspace { grid-template-columns: 220px minmax(500px,1fr) 245px; } .stage-wrap { padding: 24px 20px; } }
+  </style>
+</head>
+<body>
+  <div class="app-shell">
+    <header class="topbar">
+      <div class="brand"><div class="brand-mark"></div><span class="brand-name">LUMAFORM</span><span class="brand-sub">Light playground</span></div>
+      <div class="top-actions">
+        <button class="icon-btn" title="撤销">↶</button>
+        <button class="icon-btn" title="重做">↷</button>
+        <button class="ghost-btn" id="reset-btn">重置场景</button>
+      </div>
+    </header>
+
+    <main class="workspace">
+      <aside class="sidebar">
+        <div class="section-label">素材</div>
+        <label class="upload-box" for="file-input">
+          <div class="upload-icon">↑</div>
+          <div class="upload-title">上传平面图片</div>
+          <div class="upload-note">PNG / JPG · 支持拖入<br>建议使用横向图片</div>
+          <input id="file-input" type="file" accept="image/png,image/jpeg,image/webp" />
+        </label>
+        <div class="section-label">图层</div>
+        <div class="layers">
+          <div class="layer selected"><div class="layer-icon">✦</div><span class="layer-name">光源 01</span><span class="visibility">◉</span></div>
+          <div class="layer"><div class="layer-icon">✦</div><span class="layer-name">光源 02</span><span class="visibility">◉</span></div>
+          <div class="layer"><div class="layer-icon">▧</div><span class="layer-name">我的图片</span><span class="visibility">◉</span></div>
+        </div>
+        <div class="side-bottom">拖动空白处旋转 3D 摄像机视角<br>滚轮缩放，双击回到默认视角</div>
+      </aside>
+
+      <section class="canvas-area">
+        <div class="canvas-toolbar">
+          <div class="scene-title"><span class="scene-dot"></span><span>3D Light Space</span><span style="color:#687286">/</span><span style="color:#707b90">Flat image plane</span></div>
+          <div class="toolbar-group"><button class="toolbar-btn active">3D 场景</button><button class="toolbar-btn" id="fullscreen-btn">全屏 ⛶</button></div>
+        </div>
+        <div class="stage-wrap">
+          <div class="stage" id="stage">
+            <div class="space-3d" id="space-3d">
+              <div class="plane-3d" id="plane-3d">
+                <canvas id="canvas" width="1600" height="900"></canvas>
+                <div class="plane-lighting" id="plane-lighting" aria-hidden="true"><canvas id="lighting-canvas" width="640" height="360"></canvas></div>
+              </div>
+              <div class="orb-layer" id="orb-layer"></div>
+            </div>
+            <div class="stage-label">3D LIGHT SPACE</div>
+            <div class="stage-corner"></div>
+            <div class="hint" id="hint">拖动空白处环视 · 滚轮缩放 · 光源固定在空间中</div>
+            <div class="transform-readout" id="transform-readout">CAM X -12° &nbsp; CAM Y -18° &nbsp; Z 0° · ZOOM 90%</div>
+          </div>
+        </div>
+        <div class="bottom-bar"><div class="light-status"><span class="status-dot"></span><span>动态光照</span></div></div>
+      </section>
+
+      <aside class="inspector">
+        <div class="inspector-head"><span class="inspector-title">光源属性</span><span class="selected-chip"><i class="mini-swatch"></i><span id="selected-name">光源 01</span><button class="edit-position" id="edit-position" title="编辑光源位置和旋转">位置</button><button class="delete-light" id="delete-light" title="删除当前光源">删除</button></span></div>
+        <div class="position-editor" id="position-editor">
+          <div class="axis-title">位置 XYZ</div>
+          <div class="axis-row"><span class="axis-name">X</span><input id="position-x-input" type="range" min="-100" max="100" value="-38" /><span class="axis-value" id="position-x-value">-38</span></div>
+          <div class="axis-row"><span class="axis-name">Y</span><input id="position-y-input" type="range" min="-100" max="100" value="6" /><span class="axis-value" id="position-y-value">+6</span></div>
+          <div class="axis-row"><span class="axis-name">Z</span><input id="position-z-input" type="range" min="-180" max="220" value="80" /><span class="axis-value" id="position-z-value">+80</span></div>
+          <div class="axis-title" style="margin-top:16px">旋转光效 XYZ</div>
+          <div class="axis-row"><span class="axis-name">X</span><input id="rotation-x-input" type="range" min="-180" max="180" value="0" /><span class="axis-value" id="rotation-x-value">0°</span></div>
+          <div class="axis-row"><span class="axis-name">Y</span><input id="rotation-y-input" type="range" min="-180" max="180" value="0" /><span class="axis-value" id="rotation-y-value">0°</span></div>
+          <div class="axis-row"><span class="axis-name">Z</span><input id="rotation-z-input" type="range" min="-180" max="180" value="0" /><span class="axis-value" id="rotation-z-value">0°</span></div>
+          <div class="position-note">位置控制光源在空间中的坐标；旋转只改变光效方向，不会改变摄像机视角。</div>
+        </div>
+        <div class="control">
+          <div class="control-row"><span class="control-label">图片平面大小</span><span class="control-value" id="image-size-value">76%</span></div>
+          <input id="image-size-input" type="range" min="35" max="100" value="76" />
+          <div class="control-note" id="image-meta">原图比例 16:9 · 上传后自动保留</div>
+        </div>
+        <div class="control">
+          <div class="control-row"><span class="control-label">颜色</span></div>
+          <div class="color-row"><input id="color-input" type="color" value="#b58cff" /><input class="hex" id="hex-input" value="#B58CFF" maxlength="7" /></div>
+          <div class="preset-list" style="margin-top:12px"><button class="preset active" data-color="#b58cff" style="background:#b58cff"></button><button class="preset" data-color="#80ddff" style="background:#80ddff"></button><button class="preset" data-color="#ff9fc9" style="background:#ff9fc9"></button><button class="preset" data-color="#ffd18a" style="background:#ffd18a"></button><button class="preset" data-color="#b8ffcc" style="background:#b8ffcc"></button></div>
+        </div>
+        <div class="control">
+          <div class="control-row"><span class="control-label">光效类型</span></div>
+          <select id="effect-input" class="effect-select"><option value="rays">360°不规则散射</option><option value="star4">四角星光</option><option value="softQuatrefoil">柔角四芒光</option><option value="rainbowRing">虹彩光圈</option><option value="rainbowStar">虹彩星芒</option><option value="rainbowScatter">虹彩体积散射</option><option value="prismGhost">棱镜鬼影</option><option value="beams">锥形体积光束</option></select>
+        </div>
+        <div class="control">
+          <div class="control-row"><span class="control-label">射线规模</span><span class="control-value" id="size-value">100%</span></div>
+          <input id="size-input" type="range" min="20" max="240" value="100" />
+        </div>
+        <div class="control">
+          <div class="control-row"><span class="control-label">空间深度 Z</span><span class="control-value" id="depth-value">80</span></div>
+          <input id="depth-input" type="range" min="-180" max="220" value="80" />
+          <div class="control-note">正值靠近镜头，负值位于图片后方</div>
+        </div>
+        <div class="control">
+          <div class="control-row"><span class="control-label">光照强度</span><span class="control-value" id="intensity-value">78%</span></div>
+          <input id="intensity-input" type="range" min="0" max="100" value="78" />
+        </div>
+        <div class="control">
+          <div class="control-row"><span class="control-label">光晕范围</span><span class="control-value" id="radius-value">42%</span></div>
+          <input id="radius-input" type="range" min="10" max="80" value="42" />
+        </div>
+        <div class="control">
+          <div class="control-row"><span class="control-label">柔和度</span><span class="control-value" id="softness-value">68%</span></div>
+          <input id="softness-input" type="range" min="0" max="100" value="68" />
+        </div>
+        <div class="control">
+          <div class="toggle-row"><span class="control-label">呼吸动画</span><button class="toggle on" id="breath-toggle"></button></div>
+          <div class="control-row" style="margin-top:16px"><span class="control-label">动画速度</span><span class="control-value" id="speed-value">1.2×</span></div>
+          <input id="speed-input" type="range" min="0" max="30" value="12" />
+        </div>
+        <button class="add-light" id="add-light">＋ 添加一个光源</button>
+        <div class="tip" style="margin-top:18px"><strong>小提示</strong><br>这是 3D 体积点光照：光源沿水平、纵向和前后深度同时散射，距离、深度和强度都会影响照片受光。</div>
+      </aside>
+    </main>
+  </div>
+
+  <script>
+    const canvas = document.getElementById('canvas');
+    const ctx = canvas.getContext('2d');
+    const stage = document.getElementById('stage');
+    const space = document.getElementById('space-3d');
+    const plane = document.getElementById('plane-3d');
+    const orbLayer = document.getElementById('orb-layer');
+    const planeLighting = document.getElementById('plane-lighting');
+    const lightingCanvas = document.getElementById('lighting-canvas');
+    let lightingState = null;
+    const transformReadout = document.getElementById('transform-readout');
+    const hint = document.getElementById('hint');
+    const fileInput = document.getElementById('file-input');
+    const lights = [
+      { x: .31, y: .47, depth: 80, rotX: 0, rotY: 0, rotZ: 0, color: '#b58cff', intensity: .95, size: .68, radius: .36, softness: .68, speed: 1.2, phase: 0, effect: 'rays' },
+      { x: .73, y: .62, depth: 42, rotX: 0, rotY: 0, rotZ: 0, color: '#80ddff', intensity: .68, size: .56, radius: .28, softness: .8, speed: .8, phase: 2.3, effect: 'rays' }
+    ];
+    let selected = 0;
+    let dragging = -1;
+    let draggingOrb = -1;
+    let image = null;
+    let breathing = true;
+    let rotationX = -12;
+    let rotationY = -18;
+    let rotationZ = 0;
+    let zoom = .9;
+    let planeWidth = 76;
+    let planeAspectRatio = 16 / 9;
+    let orbitDragging = false;
+    let orbitStartX = 0;
+    let orbitStartY = 0;
+    let orbitStartRotationX = rotationX;
+    let orbitStartRotationY = rotationY;
+    function applySceneTransform() {
+      plane.style.width = `${planeWidth}%`;
+      plane.style.aspectRatio = planeAspectRatio;
+      plane.style.transform = `translate(-50%, -50%) scale(${zoom})`;
+      space.style.transform = `rotateX(${rotationX}deg) rotateY(${rotationY}deg) rotateZ(${rotationZ}deg)`;
+      transformReadout.textContent = `CAM X ${Math.round(rotationX)}°   CAM Y ${Math.round(rotationY)}°   Z ${Math.round(rotationZ)}° · ZOOM ${Math.round(zoom * 100)}%`;
+      document.getElementById('image-size-value').textContent = `${Math.round(planeWidth)}%`;
+      const meta = document.getElementById('image-meta');
+      const ratio = Math.abs(planeAspectRatio - 16 / 9) < .01 ? '16:9' : `${planeAspectRatio.toFixed(2)}:1`;
+      meta.textContent = `原图比例 ${ratio} · 上传后自动保留`;
+    }
+
+    function rebuildLightOrbs() {
+      orbLayer.innerHTML = '';
+      lights.forEach((_, i) => {
+        const orb = document.createElement('div');
+        orb.className = 'light-orb';
+        const rayPlanes = [
+          { className: 'ray-plane', count: 12, offset: i % 2 ? 7 : -4 },
+          { className: 'ray-plane ray-plane-x', count: 8, offset: 13 },
+          { className: 'ray-plane ray-plane-y', count: 8, offset: -11 }
+        ];
+        rayPlanes.forEach((planeConfig, planeIndex) => {
+          const rayPlane = document.createElement('div');
+          rayPlane.className = planeConfig.className;
+          for (let rayIndex = 0; rayIndex < planeConfig.count; rayIndex++) {
+            const ray = document.createElement('span');
+            ray.className = 'orb-ray';
+            ray.style.setProperty('--angle', `${(rayIndex * 360 / planeConfig.count) + planeConfig.offset}deg`);
+            ray.style.setProperty('--ray-delay', `${((rayIndex * 0.13) + (i * .17) + (planeIndex * .21)).toFixed(2)}s`);
+            ray.style.setProperty('--ray-scale', `${(.72 + ((rayIndex * 5 + planeIndex * 3) % 7) / 16).toFixed(2)}`);
+            rayPlane.appendChild(ray);
+          }
+          orb.appendChild(rayPlane);
+        });
+        const organicVolume = document.createElement('div');
+        organicVolume.className = 'organic-volume';
+        const organicCount = 30;
+        for (let organicIndex = 0; organicIndex < organicCount; organicIndex++) {
+          const wisp = document.createElement('span');
+          wisp.className = 'organic-wisp';
+          const wobble = Math.sin((organicIndex + 1) * 2.17 + i * .8) * 8 + Math.cos(organicIndex * .71) * 4;
+          const angle = organicIndex * (360 / organicCount) + wobble;
+          wisp.style.setProperty('--organic-angle', `${angle.toFixed(2)}deg`);
+          wisp.style.setProperty('--organic-drift', `${(Math.sin(organicIndex * 1.41 + i) * 8).toFixed(2)}deg`);
+          wisp.style.setProperty('--organic-length', `${(.44 + ((organicIndex * 11 + i * 5) % 25) / 20).toFixed(2)}`);
+          wisp.style.setProperty('--organic-width', `${(2.4 + ((organicIndex * 7 + i * 3) % 18) / 4).toFixed(2)}`);
+          wisp.style.setProperty('--organic-skew', `${(Math.sin(organicIndex * 1.73) * 19).toFixed(2)}deg`);
+          wisp.style.setProperty('--organic-blur', `${(1.25 + ((organicIndex * 5) % 9) / 4).toFixed(2)}px`);
+          wisp.style.setProperty('--organic-opacity-mult', `${(.18 + ((organicIndex * 13 + i * 7) % 11) / 22).toFixed(2)}`);
+          wisp.style.setProperty('--organic-delay', `${((organicIndex * .09 + i * .14) % 1.9).toFixed(2)}s`);
+          organicVolume.appendChild(wisp);
+        }
+        const cloudCount = 10;
+        for (let cloudIndex = 0; cloudIndex < cloudCount; cloudIndex++) {
+          const cloud = document.createElement('span');
+          cloud.className = 'organic-cloud';
+          cloud.style.setProperty('--cloud-angle', `${(cloudIndex * 360 / cloudCount + Math.sin(cloudIndex * 2.31 + i) * 18).toFixed(2)}deg`);
+          cloud.style.setProperty('--cloud-drift', `${(Math.cos(cloudIndex * 1.17 + i) * 11).toFixed(2)}deg`);
+          cloud.style.setProperty('--cloud-distance', `${(12 + ((cloudIndex * 19 + i * 7) % 34))}px`);
+          cloud.style.setProperty('--cloud-width', `${(.34 + ((cloudIndex * 7 + i * 3) % 12) / 20).toFixed(2)}`);
+          cloud.style.setProperty('--cloud-height', `${(.12 + ((cloudIndex * 5 + i * 2) % 7) / 28).toFixed(2)}`);
+          cloud.style.setProperty('--cloud-skew', `${(Math.sin(cloudIndex * 1.47) * 15).toFixed(2)}deg`);
+          cloud.style.setProperty('--cloud-blur', `${(3.5 + ((cloudIndex * 7) % 8) / 2).toFixed(2)}px`);
+          cloud.style.setProperty('--cloud-opacity-mult', `${(.18 + ((cloudIndex * 11 + i * 5) % 10) / 22).toFixed(2)}`);
+          cloud.style.setProperty('--cloud-delay', `${((cloudIndex * .17 + i * .12) % 1.8).toFixed(2)}s`);
+          organicVolume.appendChild(cloud);
+        }
+        const particleCount = 12;
+        for (let particleIndex = 0; particleIndex < particleCount; particleIndex++) {
+          const particle = document.createElement('span');
+          particle.className = 'organic-particle';
+          particle.style.setProperty('--particle-angle', `${(particleIndex * 360 / particleCount + Math.sin(particleIndex * 1.9) * 13).toFixed(2)}deg`);
+          particle.style.setProperty('--particle-drift', `${(Math.cos(particleIndex * 1.3) * 12).toFixed(2)}deg`);
+          particle.style.setProperty('--particle-distance', `${(18 + ((particleIndex * 17 + i * 9) % 35))}px`);
+          particle.style.setProperty('--particle-size', `${(2 + ((particleIndex * 7) % 5))}px`);
+          particle.style.setProperty('--particle-scale', `${(.8 + ((particleIndex * 3) % 7) / 10).toFixed(2)}`);
+          particle.style.setProperty('--particle-opacity-mult', `${(.22 + ((particleIndex * 5 + i * 3) % 8) / 15).toFixed(2)}`);
+          particle.style.setProperty('--particle-delay', `${((particleIndex * .13 + i * .2) % 1.7).toFixed(2)}s`);
+          organicVolume.appendChild(particle);
+        }
+        const organicVertical = organicVolume.cloneNode(true);
+        organicVertical.classList.add('organic-volume-vertical');
+        const organicDepth = organicVolume.cloneNode(true);
+        organicDepth.classList.add('organic-volume-depth');
+        orb.appendChild(organicVolume);
+        orb.appendChild(organicVertical);
+        orb.appendChild(organicDepth);
+        const starVolume = document.createElement('div');
+        const starType = 'four';
+        starVolume.className = `star-volume ${starType}`;
+        const starHalo = document.createElement('span');
+        starHalo.className = 'star-halo';
+        starVolume.appendChild(starHalo);
+        const starLayers = [
+          { className: 'star-plane', opacity: 1, axisOffset: 0 },
+          { className: 'star-plane vertical', opacity: .7, axisOffset: 11 },
+          { className: 'star-plane depth', opacity: .45, axisOffset: -7 }
+        ];
+        starLayers.forEach((layerConfig, layerIndex) => {
+          const starPlane = document.createElement('div');
+          starPlane.className = layerConfig.className;
+          starPlane.style.opacity = layerConfig.opacity;
+        const rayCount = layerIndex === 0 ? (starType === 'four' ? 8 : 10) : (starType === 'four' ? 4 : 5);
+          for (let rayIndex = 0; rayIndex < rayCount; rayIndex++) {
+            const ray = document.createElement('span');
+            ray.className = 'star-ray';
+          const angleStep = 360 / rayCount;
+          const angleOffset = layerIndex === 0 ? 0 : (starType === 'four' ? 45 : 36);
+            ray.style.setProperty('--star-angle', `${rayIndex * angleStep + angleOffset + layerConfig.axisOffset + (i * 9)}deg`);
+          const pointStrength = layerIndex === 0 ? (rayIndex % 2 ? .58 : 1.18) : (.72 + (rayIndex % 3) * .12);
+            ray.style.setProperty('--star-length', `calc(var(--ray-length) * ${layerIndex === 0 ? pointStrength : (.58 + (rayIndex % 4) * .16)})`);
+            ray.style.setProperty('--star-width', `${layerIndex === 0 ? 4.2 : 3.4}px`);
+            ray.style.setProperty('--star-scale', `${layerIndex === 0 && rayIndex % 2 ? .58 : 1}`);
+            ray.style.setProperty('--star-blur', `${layerIndex === 0 ? 2.2 : 3.2}px`);
+            ray.style.setProperty('--star-opacity', `${layerIndex === 0 ? .64 : .42}`);
+            ray.style.setProperty('--star-delay', `${(rayIndex * .15 + layerIndex * .22 + i * .17).toFixed(2)}s`);
+            starPlane.appendChild(ray);
+          }
+          starVolume.appendChild(starPlane);
+        });
+        orb.appendChild(starVolume);
+        const quatrefoil=document.createElement('div'); quatrefoil.className='quatrefoil-volume';
+        const quatrefoilGlow=document.createElement('span'); quatrefoilGlow.className='quatrefoil-glow'; quatrefoil.appendChild(quatrefoilGlow);
+        const quatrefoilShape=document.createElement('span'); quatrefoilShape.className='quatrefoil-shape'; quatrefoil.appendChild(quatrefoilShape);
+        orb.appendChild(quatrefoil);
+        const rainbowRing = document.createElement('div');
+        rainbowRing.className = 'rainbow-ring-volume';
+        ['rainbow-ring-halo','rainbow-ring-edge','rainbow-ring-glint'].forEach(className => { const el=document.createElement('span'); el.className=className; rainbowRing.appendChild(el); });
+        orb.appendChild(rainbowRing);
+        const rainbowStar = document.createElement('div');
+        rainbowStar.className = 'rainbow-star-volume';
+        const starHaze=document.createElement('span'); starHaze.className='rainbow-star-haze'; rainbowStar.appendChild(starHaze);
+        const flareRays=[
+          {angle:0,length:2.9,width:8,blur:2.6,opacity:.88,scale:1},
+          {angle:90,length:2.9,width:8,blur:2.6,opacity:.88,scale:1},
+          {angle:42,length:1.55,width:5,blur:3.2,opacity:.56,scale:1},
+          {angle:138,length:1.55,width:5,blur:3.2,opacity:.56,scale:1},
+          {angle:18,length:1.05,width:3,blur:3.5,opacity:.42,scale:1},
+          {angle:108,length:1.05,width:3,blur:3.5,opacity:.42,scale:1}
+        ];
+        flareRays.forEach((config,index)=>{
+          const ray=document.createElement('span'); ray.className=`rainbow-star-ray${index>1?' diagonal':''}`;
+          ray.style.setProperty('--flare-angle',`${config.angle+(i%2?4:0)}deg`);
+          ray.style.setProperty('--flare-length',`calc(var(--ray-length) * ${config.length})`);
+          ray.style.setProperty('--flare-width',`${config.width}px`);
+          ray.style.setProperty('--flare-blur',`${config.blur}px`);
+          ray.style.setProperty('--flare-opacity',`${config.opacity}`);
+          ray.style.setProperty('--flare-scale',`${config.scale}`);
+          rainbowStar.appendChild(ray);
+        });
+        orb.appendChild(rainbowStar);
+        const rainbowScatter=document.createElement('div'); rainbowScatter.className='rainbow-scatter-volume';
+        const scatterCloud=document.createElement('span'); scatterCloud.className='rainbow-scatter-cloud'; rainbowScatter.appendChild(scatterCloud);
+        for(let scatterIndex=0;scatterIndex<18;scatterIndex++){
+          const ray=document.createElement('span'); ray.className='rainbow-scatter-ray';
+          const seed=Math.sin((scatterIndex+4)*17.31+i*4.7)*19341.17; const random=seed-Math.floor(seed);
+          ray.style.setProperty('--scatter-angle',`${(scatterIndex*20+random*18).toFixed(2)}deg`);
+          ray.style.setProperty('--scatter-length',`${(.42+random*1.35).toFixed(2)}`);
+          ray.style.setProperty('--scatter-width',`${(4+random*19).toFixed(1)}px`);
+          ray.style.setProperty('--scatter-skew',`${(-18+random*36).toFixed(1)}deg`);
+          ray.style.setProperty('--scatter-blur',`${(6+random*13).toFixed(1)}px`);
+          ray.style.setProperty('--scatter-opacity',`${(.16+random*.29).toFixed(2)}`);
+          rainbowScatter.appendChild(ray);
+        }
+        orb.appendChild(rainbowScatter);
+        const prismGhost=document.createElement('div'); prismGhost.className='prism-ghost-volume';
+        const prismAxis=document.createElement('span'); prismAxis.className='prism-axis'; prismGhost.appendChild(prismAxis);
+        [[-1.35,-.32,1,.0],[-.82,.24,.46,18],[.76,-.16,.31,-12]].forEach(([dx,dy,scale,rotation],ghostIndex)=>{
+          const flare=document.createElement('span'); flare.className=`prism-ghost-flare${ghostIndex?' small':''}`;
+          flare.style.setProperty('--ghost-x',`calc(50% + var(--ray-length) * ${dx})`); flare.style.setProperty('--ghost-y',`calc(50% + var(--ray-length) * ${dy})`);
+          flare.style.setProperty('--ghost-size',`calc(var(--ray-length) * ${scale})`); flare.style.setProperty('--ghost-rotation',`${rotation}deg`);
+          flare.style.setProperty('--ghost-blur',`${ghostIndex?5:12}px`); prismGhost.appendChild(flare);
+        });
+        orb.appendChild(prismGhost);
+        const beamVolume = document.createElement('div');
+        beamVolume.className = 'beam-volume';
+        const beamAngles = [-30, -19, -8, 4, 16, 28];
+        [
+          { className: 'beam-plane', opacity: 1 },
+          { className: 'beam-plane beam-plane-depth', opacity: .55 }
+        ].forEach((beamPlaneConfig, planeIndex) => {
+          const beamPlane = document.createElement('div');
+          beamPlane.className = beamPlaneConfig.className;
+          beamPlane.style.opacity = beamPlaneConfig.opacity;
+          beamAngles.forEach((angle, beamIndex) => {
+            const beam = document.createElement('span');
+            beam.className = 'beam-ray';
+            beam.style.setProperty('--beam-angle', `${angle + (planeIndex ? 4 : 0)}deg`);
+            beam.style.setProperty('--beam-delay', `${((beamIndex * .16) + (i * .19) + (planeIndex * .24)).toFixed(2)}s`);
+            beamPlane.appendChild(beam);
+          });
+          beamVolume.appendChild(beamPlane);
+        });
+        orb.appendChild(beamVolume);
+        const core = document.createElement('span');
+        core.className = 'orb-core';
+        orb.appendChild(core);
+        orb.addEventListener('pointerdown', e => {
+          e.stopPropagation();
+          draggingOrb = i;
+          setSelected(i);
+          orb.setPointerCapture(e.pointerId);
+          stage.style.cursor = 'grabbing';
+          hint.classList.add('hidden');
+        });
+        orbLayer.appendChild(orb);
+      });
+      updateLightOrbs();
+    }
+
+    function updateLightOrbs(now = performance.now()) {
+      [...orbLayer.children].forEach((orb, i) => {
+        const light = lights[i];
+        if (!light) return;
+        const pulse = breathing ? Math.sin(now * .001 * light.speed + light.phase) * .07 : 0;
+        const orbSize = Math.round(5 + Math.min(2, light.size * 1.35));
+        const rayLength = Math.round(44 + light.radius * 82 + light.size * 18);
+        // Extend volumetric beams beyond the stage so they fade off-screen rather than ending abruptly.
+        const beamLength = Math.round(Math.max(stage.clientWidth, stage.clientHeight) * 1.8 + rayLength * .35);
+        const beamWidth = Math.round(17 + light.radius * 34 + light.size * 10);
+        const rayWidth = Math.max(.7, Math.min(2.2, .72 + (1 - light.softness) * 1.2));
+        const pulseDuration = Math.max(.9, 2.8 / Math.max(.35, light.speed));
+        orb.style.left = `${light.x * 100}%`;
+        orb.style.top = `${light.y * 100}%`;
+        orb.style.width = `${orbSize}px`;
+        orb.style.height = `${orbSize}px`;
+        orb.style.margin = `${-orbSize / 2}px 0 0 ${-orbSize / 2}px`;
+        orb.style.transform = `translate3d(0, 0, ${light.depth}px) rotateX(${light.rotX || 0}deg) rotateY(${light.rotY || 0}deg) rotateZ(${light.rotZ || 0}deg)`;
+        orb.style.setProperty('--orb-color', light.color);
+        orb.style.setProperty('--ray-length', `${rayLength}px`);
+        orb.style.setProperty('--ray-width', `${rayWidth}px`);
+        orb.style.setProperty('--ray-opacity', `${Math.max(.2, Math.min(.86, .2 + light.intensity * .58))}`);
+        orb.style.setProperty('--beam-length', `${beamLength}px`);
+        orb.style.setProperty('--beam-width', `${beamWidth}px`);
+        orb.style.setProperty('--beam-opacity', `${Math.max(.18, Math.min(.76, .18 + light.intensity * .5))}`);
+        orb.style.setProperty('--pulse-duration', `${pulseDuration.toFixed(2)}s`);
+        orb.style.opacity = `${Math.max(.38, Math.min(1, .66 + light.intensity * .25 + pulse))}`;
+        orb.classList.toggle('selected', i === selected);
+        orb.classList.toggle('breathing', breathing);
+        orb.classList.toggle('rays', light.effect === 'rays');
+        orb.classList.toggle('beams', light.effect === 'beams');
+        orb.classList.toggle('star-four', light.effect === 'star4');
+        orb.classList.toggle('soft-quatrefoil', light.effect === 'softQuatrefoil');
+        orb.classList.toggle('rainbow-ring', light.effect === 'rainbowRing');
+        orb.classList.toggle('rainbow-star', light.effect === 'rainbowStar');
+        orb.classList.toggle('rainbow-scatter', light.effect === 'rainbowScatter');
+        orb.classList.toggle('prism-ghost', light.effect === 'prismGhost');
+      });
+      updatePlaneLighting(now);
+    }
+
+    function hexToRgb(hex) {
+      const clean = hex.replace('#', '');
+      const value = clean.length === 3 ? clean.split('').map(c => c + c).join('') : clean;
+      return {
+        r: parseInt(value.slice(0, 2), 16) || 0,
+        g: parseInt(value.slice(2, 4), 16) || 0,
+        b: parseInt(value.slice(4, 6), 16) || 0
+      };
+    }
+
+    function rgba(rgb, alpha) {
+      return `rgba(${rgb.r}, ${rgb.g}, ${rgb.b}, ${Math.max(0, Math.min(1, alpha)).toFixed(3)})`;
+    }
+
+    function initLightingRenderer() {
+      const gl = lightingCanvas?.getContext('webgl', { alpha: true, premultipliedAlpha: false, antialias: true });
+      if (!gl) return false;
+      const vertexSource = `
+        attribute vec2 a_position;
+        varying vec2 v_uv;
+        void main() {
+          v_uv = a_position * 0.5 + 0.5;
+          gl_Position = vec4(a_position, 0.0, 1.0);
+        }
+      `;
+      const fragmentSource = `
+        precision mediump float;
+        varying vec2 v_uv;
+        uniform int u_count;
+        uniform vec3 u_positions[8];
+        uniform vec3 u_colors[8];
+        uniform float u_intensity[8];
+        uniform float u_radius[8];
+        void main() {
+          vec3 total = vec3(0.0);
+          float alpha = 0.0;
+          for (int i = 0; i < 8; i++) {
+            if (i < u_count) {
+              vec3 light = u_positions[i];
+              vec2 delta = v_uv - light.xy;
+              float surfaceDistance = length(delta);
+              float distance3d = sqrt(dot(delta, delta) + light.z * light.z);
+              float normalTerm = abs(light.z) / max(distance3d, 0.001);
+              float inverseSquare = 1.0 / (1.0 + distance3d * distance3d * 7.5);
+              float spread = exp(-pow(surfaceDistance / max(u_radius[i], 0.02), 2.0));
+              float contribution = u_intensity[i] * normalTerm * (0.3 + 0.9 * inverseSquare) * spread;
+              total += u_colors[i] * contribution;
+              alpha += contribution * 0.42;
+            }
+          }
+          float maxChannel = max(total.r, max(total.g, total.b));
+          gl_FragColor = vec4(clamp(total * 0.92, 0.0, 1.0), clamp(alpha + maxChannel * 0.16, 0.0, 0.94));
+        }
+      `;
+      const compile = (type, source) => {
+        const shader = gl.createShader(type);
+        gl.shaderSource(shader, source);
+        gl.compileShader(shader);
+        if (!gl.getShaderParameter(shader, gl.COMPILE_STATUS)) {
+          gl.deleteShader(shader);
+          return null;
+        }
+        return shader;
+      };
+      const vertexShader = compile(gl.VERTEX_SHADER, vertexSource);
+      const fragmentShader = compile(gl.FRAGMENT_SHADER, fragmentSource);
+      if (!vertexShader || !fragmentShader) return false;
+      const program = gl.createProgram();
+      gl.attachShader(program, vertexShader);
+      gl.attachShader(program, fragmentShader);
+      gl.linkProgram(program);
+      if (!gl.getProgramParameter(program, gl.LINK_STATUS)) return false;
+      const buffer = gl.createBuffer();
+      gl.bindBuffer(gl.ARRAY_BUFFER, buffer);
+      gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-1, -1, 1, -1, -1, 1, 1, 1]), gl.STATIC_DRAW);
+      lightingState = {
+        gl,
+        program,
+        buffer,
+        position: gl.getAttribLocation(program, 'a_position'),
+        count: gl.getUniformLocation(program, 'u_count'),
+        positions: gl.getUniformLocation(program, 'u_positions'),
+        colors: gl.getUniformLocation(program, 'u_colors'),
+        intensity: gl.getUniformLocation(program, 'u_intensity'),
+        radius: gl.getUniformLocation(program, 'u_radius')
+      };
+      gl.clearColor(0, 0, 0, 0);
+      gl.enable(gl.BLEND);
+      gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
+      return true;
+    }
+
+    function renderLighting3D(positionData, colorData, intensityData, radiusData, count) {
+      if (!lightingState) return;
+      const { gl, program, buffer, position, positions, colors, intensity, radius } = lightingState;
+      gl.viewport(0, 0, lightingCanvas.width, lightingCanvas.height);
+      gl.clear(gl.COLOR_BUFFER_BIT);
+      gl.useProgram(program);
+      gl.bindBuffer(gl.ARRAY_BUFFER, buffer);
+      gl.enableVertexAttribArray(position);
+      gl.vertexAttribPointer(position, 2, gl.FLOAT, false, 0, 0);
+      gl.uniform1i(lightingState.count, count);
+      gl.uniform3fv(positions, new Float32Array(positionData));
+      gl.uniform3fv(colors, new Float32Array(colorData));
+      gl.uniform1fv(intensity, new Float32Array(intensityData));
+      gl.uniform1fv(radius, new Float32Array(radiusData));
+      gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
+    }
+
+    function updatePlaneLighting(now = performance.now()) {
+      if (!planeLighting) return;
+      const stageAspect = 16 / 9;
+      const planeHeight = planeWidth * stageAspect / planeAspectRatio;
+      const planeLeft = (100 - planeWidth) / 2;
+      const planeTop = (100 - planeHeight) / 2;
+      const layers = [];
+      const positionData = [];
+      const colorData = [];
+      const intensityData = [];
+      const radiusData = [];
+
+      lights.slice(0, 8).forEach(light => {
+        const x = (light.x * 100 - planeLeft) / planeWidth * 100;
+        const y = (light.y * 100 - planeTop) / planeHeight * 100;
+        const rgb = hexToRgb(light.color);
+        const pulse = breathing ? Math.sin(now * .001 * light.speed + light.phase) * .1 : 0;
+        const depth = Math.max(.06, Math.abs(light.depth) / 250);
+        const power = Math.max(.1, Math.min(2.4, light.intensity * 1.85 * (1 + pulse)));
+        const radius = Math.max(22, Math.min(90, 25 + light.radius * 50 + light.size * 11));
+        const coreAlpha = .18 + power * .3;
+        const midAlpha = .08 + power * .2;
+        const edgeAlpha = .02 + power * .065;
+        const liftAlpha = .03 + power * .085;
+
+        positionData.push(x / 100, 1 - y / 100, depth);
+        colorData.push(rgb.r / 255, rgb.g / 255, rgb.b / 255);
+        intensityData.push(power);
+        radiusData.push(Math.max(.11, Math.min(.8, .15 + light.radius * .42 + light.size * .08)));
+
+        layers.push(`radial-gradient(ellipse at ${x.toFixed(2)}% ${y.toFixed(2)}%, ${rgba(rgb, coreAlpha)} 0%, ${rgba(rgb, midAlpha)} 15%, ${rgba(rgb, edgeAlpha)} ${Math.round(radius * .63)}%, transparent ${Math.round(radius)}%)`);
+        layers.push(`radial-gradient(ellipse at ${x.toFixed(2)}% ${y.toFixed(2)}%, ${rgba({r:255,g:255,b:255}, liftAlpha)} 0%, ${rgba({r:255,g:255,b:255}, liftAlpha * .34)} 17%, transparent 42%)`);
+      });
+
+      if (lightingState) {
+        planeLighting.style.background = 'transparent';
+        renderLighting3D(positionData, colorData, intensityData, radiusData, positionData.length / 3);
+      } else {
+        planeLighting.style.background = layers.length ? layers.join(',') : 'transparent';
+      }
+    }
+
+    function drawDefaultImage() {
+      ctx.fillStyle = '#000';
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+    }
+    function drawImageToPlane(img) {
+      ctx.fillStyle = '#000'; ctx.fillRect(0,0,canvas.width,canvas.height);
+      ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+    }
+    function render(now) {
+      if (image) drawImageToPlane(image); else drawDefaultImage();
+      const vignette = ctx.createRadialGradient(canvas.width/2, canvas.height/2, canvas.height*.12, canvas.width/2,canvas.height/2,canvas.width*.72);
+      vignette.addColorStop(0, 'rgba(0,0,0,0)'); vignette.addColorStop(1,'rgba(0,0,0,.34)');
+      ctx.fillStyle = vignette; ctx.fillRect(0,0,canvas.width,canvas.height);
+      updateLightOrbs(now);
+      requestAnimationFrame(render);
+    }
+    function formatSigned(value) { return `${value > 0 ? '+' : ''}${value}`; }
+    function syncPositionControls(light) {
+      if (!light) return;
+      const values = {
+        'position-x-input': Math.round((light.x - .5) * 200),
+        'position-y-input': Math.round((.5 - light.y) * 200),
+        'position-z-input': Math.round(light.depth),
+        'rotation-x-input': Math.round(light.rotX || 0),
+        'rotation-y-input': Math.round(light.rotY || 0),
+        'rotation-z-input': Math.round(light.rotZ || 0)
+      };
+      Object.entries(values).forEach(([id, value]) => {
+        const input = document.getElementById(id);
+        if (input) input.value = value;
+        const valueEl = document.getElementById(id.replace('-input', '-value'));
+        if (valueEl) valueEl.textContent = id.startsWith('rotation-') ? `${formatSigned(value)}°` : formatSigned(value);
+      });
+    }
+    function setSelected(i) { selected = i; updateControls(); }
+    function updateControls() {
+      const l = lights[selected];
+      const lightControls = ['color-input','hex-input','effect-input','size-input','depth-input','intensity-input','radius-input','softness-input','speed-input','breath-toggle','position-x-input','position-y-input','position-z-input','rotation-x-input','rotation-y-input','rotation-z-input'];
+      const deleteButton = document.getElementById('delete-light');
+      const editPositionButton = document.getElementById('edit-position');
+      if (!l) {
+        document.getElementById('selected-name').textContent = '无光源';
+        lightControls.forEach(id => { const el = document.getElementById(id); if (el) el.disabled = true; });
+        document.querySelectorAll('.preset').forEach(p => p.disabled = true);
+        deleteButton.disabled = true;
+        editPositionButton.disabled = true;
+        updateLightOrbs();
+        return;
+      }
+      lightControls.forEach(id => { const el = document.getElementById(id); if (el) el.disabled = false; });
+      document.querySelectorAll('.preset').forEach(p => p.disabled = false);
+      deleteButton.disabled = false;
+      editPositionButton.disabled = false;
+      document.getElementById('selected-name').textContent = `光源 ${String(selected+1).padStart(2,'0')}`;
+      document.getElementById('color-input').value = l.color;
+      document.getElementById('hex-input').value = l.color.toUpperCase();
+      document.getElementById('effect-input').value = l.effect || 'rays';
+      document.getElementById('size-input').value = Math.round(l.size*100); document.getElementById('size-value').textContent = `${Math.round(l.size*100)}%`;
+      document.getElementById('depth-input').value = l.depth; document.getElementById('depth-value').textContent = `${l.depth > 0 ? '+' : ''}${l.depth}`;
+      document.getElementById('intensity-input').value = Math.round(l.intensity*100); document.getElementById('intensity-value').textContent = `${Math.round(l.intensity*100)}%`;
+      document.getElementById('radius-input').value = Math.round(l.radius*100); document.getElementById('radius-value').textContent = `${Math.round(l.radius*100)}%`;
+      document.getElementById('softness-input').value = Math.round(l.softness*100); document.getElementById('softness-value').textContent = `${Math.round(l.softness*100)}%`;
+      document.getElementById('speed-input').value = Math.round(l.speed*10); document.getElementById('speed-value').textContent = `${l.speed.toFixed(1)}×`;
+      syncPositionControls(l);
+      document.querySelectorAll('.preset').forEach(p => p.classList.toggle('active', p.dataset.color.toLowerCase() === l.color.toLowerCase()));
+      document.querySelectorAll('.layer').forEach((el,i) => el.classList.toggle('selected', i === selected));
+      updateLightOrbs();
+    }
+    function renderLayers() {
+      const container = document.querySelector('.layers');
+      container.innerHTML = lights.map((_, i) => `<div class="layer"><div class="layer-icon">✦</div><span class="layer-name">光源 ${String(i+1).padStart(2,'0')}</span><span class="visibility">◉</span></div>`).join('') + '<div class="layer"><div class="layer-icon">▧</div><span class="layer-name">我的图片</span><span class="visibility">◉</span></div>';
+      container.querySelectorAll('.layer').forEach((el, i) => el.addEventListener('click', () => { if (i < lights.length) setSelected(i); }));
+    }
+    stage.addEventListener('pointerdown', e => {
+      orbitDragging = true; orbitStartX = e.clientX; orbitStartY = e.clientY; orbitStartRotationX = rotationX; orbitStartRotationY = rotationY; stage.setPointerCapture(e.pointerId); stage.style.cursor = 'grabbing'; hint.classList.add('hidden');
+    });
+    stage.addEventListener('pointermove', e => {
+      if (draggingOrb >= 0) { const rect=stage.getBoundingClientRect(); lights[draggingOrb].x=Math.max(.03,Math.min(.97,(e.clientX-rect.left)/rect.width)); lights[draggingOrb].y=Math.max(.03,Math.min(.97,(e.clientY-rect.top)/rect.height)); syncPositionControls(lights[draggingOrb]); updateLightOrbs(); return; }
+      if (!orbitDragging) return;
+      rotationY = Math.max(-78, Math.min(78, orbitStartRotationY + (e.clientX - orbitStartX) * .28));
+      rotationX = Math.max(-68, Math.min(68, orbitStartRotationX - (e.clientY - orbitStartY) * .24));
+      applySceneTransform();
+    });
+    stage.addEventListener('pointerup', () => { dragging=-1; draggingOrb=-1; orbitDragging=false; stage.style.cursor='grab'; });
+    stage.addEventListener('pointercancel', () => { dragging=-1; draggingOrb=-1; orbitDragging=false; stage.style.cursor='grab'; });
+    stage.addEventListener('wheel', e => { e.preventDefault(); zoom = Math.max(.55, Math.min(1.34, zoom - e.deltaY * .0008)); applySceneTransform(); hint.classList.add('hidden'); }, { passive:false });
+    stage.addEventListener('dblclick', () => { rotationX=-12; rotationY=-18; rotationZ=0; zoom=.9; applySceneTransform(); });
+    document.getElementById('color-input').addEventListener('input', e => { lights[selected].color=e.target.value; updateControls(); });
+    document.getElementById('hex-input').addEventListener('change', e => { if(/^#[0-9a-f]{6}$/i.test(e.target.value)){lights[selected].color=e.target.value; updateControls();} });
+    document.getElementById('effect-input').addEventListener('change', e => { if(lights[selected]){lights[selected].effect=e.target.value; rebuildLightOrbs(); updateControls();} });
+    document.querySelectorAll('.preset').forEach(p=>p.addEventListener('click',()=>{lights[selected].color=p.dataset.color;updateControls();}));
+    document.getElementById('image-size-input').addEventListener('input', e => { planeWidth=Number(e.target.value); applySceneTransform(); });
+    document.getElementById('edit-position').addEventListener('click', e => {
+      const editor = document.getElementById('position-editor');
+      const open = editor.classList.toggle('open');
+      e.currentTarget.classList.toggle('active', open);
+    });
+    const positionSliders = [
+      ['position-x-input', value => { lights[selected].x = .5 + value / 200; }],
+      ['position-y-input', value => { lights[selected].y = .5 - value / 200; }],
+      ['position-z-input', value => { lights[selected].depth = value; }],
+      ['rotation-x-input', value => { lights[selected].rotX = value; }],
+      ['rotation-y-input', value => { lights[selected].rotY = value; }],
+      ['rotation-z-input', value => { lights[selected].rotZ = value; }]
+    ];
+    positionSliders.forEach(([id, apply]) => document.getElementById(id).addEventListener('input', e => {
+      if (!lights[selected]) return;
+      apply(Number(e.target.value));
+      syncPositionControls(lights[selected]);
+      updateLightOrbs();
+    }));
+    const sliders = [['size-input','size','size-value',v=>`${v}%`,v=>v/100],['depth-input','depth','depth-value',v=>`${v > 0 ? '+' : ''}${v}`,v=>v],['intensity-input','intensity','intensity-value',v=>`${v}%`,v=>v/100],['radius-input','radius','radius-value',v=>`${v}%`,v=>v/100],['softness-input','softness','softness-value',v=>`${v}%`,v=>v/100],['speed-input','speed','speed-value',v=>`${(v/10).toFixed(1)}×`,v=>v/10]];
+    sliders.forEach(([id,key,label,format,convert])=>document.getElementById(id).addEventListener('input',e=>{if(!lights[selected])return; const v=Number(e.target.value); lights[selected][key]=convert(v); document.getElementById(label).textContent=format(v); if(key==='depth') syncPositionControls(lights[selected]); updateLightOrbs();}));
+    document.getElementById('breath-toggle').addEventListener('click',e=>{breathing=!breathing;e.currentTarget.classList.toggle('on',breathing);});
+    document.getElementById('add-light').addEventListener('click',()=>{const palette=['#ff9fc9','#ffd18a','#b8ffcc','#80ddff']; lights.push({x:.5+Math.random()*.25,y:.3+Math.random()*.4,depth:70,rotX:0,rotY:0,rotZ:0,color:palette[lights.length%palette.length],intensity:.55,size:.58,radius:.28,softness:.7,speed:1,phase:Math.random()*6,effect:'rays'}); renderLayers(); rebuildLightOrbs(); setSelected(lights.length-1); });
+    document.getElementById('delete-light').addEventListener('click',()=>{if(selected<0 || !lights[selected])return; lights.splice(selected,1); selected=Math.min(selected,lights.length-1); renderLayers(); rebuildLightOrbs(); updateControls();});
+    document.getElementById('reset-btn').addEventListener('click',()=>{
+      lights.splice(0,lights.length,{x:.31,y:.47,depth:80,rotX:0,rotY:0,rotZ:0,color:'#b58cff',intensity:.95,size:.68,radius:.36,softness:.68,speed:1.2,phase:0,effect:'rays'},{x:.73,y:.62,depth:42,rotX:0,rotY:0,rotZ:0,color:'#80ddff',intensity:.68,size:.56,radius:.28,softness:.8,speed:.8,phase:2.3,effect:'rays'});
+      selected=0; renderLayers(); rebuildLightOrbs(); rotationX=-12; rotationY=-18; rotationZ=0; zoom=.9; planeWidth=76; document.getElementById('image-size-input').value=76; applySceneTransform(); updateControls();
+    });
+    document.getElementById('fullscreen-btn').addEventListener('click',()=>{if(!document.fullscreenElement)stage.requestFullscreen?.();else document.exitFullscreen?.();});
+    fileInput.addEventListener('change', e=>{const f=e.target.files[0];if(!f)return;const img=new Image();img.onload=()=>{image=img;planeAspectRatio=img.width/img.height;canvas.width=1600;canvas.height=Math.max(1,Math.round(canvas.width/planeAspectRatio));applySceneTransform();};img.src=URL.createObjectURL(f);});
+    initLightingRenderer();
+    renderLayers(); rebuildLightOrbs(); applySceneTransform(); updateControls(); requestAnimationFrame(render);
+  </script>
+</body>
+</html>
